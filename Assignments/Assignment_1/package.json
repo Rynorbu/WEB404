@@ -1,0 +1,18 @@
+{
+  "name": "secure-file-upload",
+  "version": "1.0.0",
+  "description": "WEB404 Assignment 1 - File upload feature with defences against malicious uploads",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  }
+}
