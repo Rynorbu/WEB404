@@ -1,19 +1,9 @@
 <div align="center">
 
 # DrukShelf: SQL Injection
-### Building a SQL-Injection-Vulnerable Web Application and Defending It with Parameterised Queries
+### Building a SQL-Injection-Vulnerable Web App and Fixing It with Parameterised Queries
 
 **WEB404: Secure Coding Practices · Assignment 3**
-
-| | |
-|---|---|
-| **Name** | *[Your Name]* |
-| **Student ID** | *[Your Student ID]* |
-| **Programme** | *[Your Programme]* |
-| **Institution** | *[Your College / University]* |
-| **Submitted to** | *[Lecturer's Name]* |
-| **Date of submission** | *[DD Month YYYY]* |
-
 </div>
 
 ---
@@ -24,100 +14,86 @@
 2. [Objectives](#2-objectives)
 3. [Technologies Used](#3-technologies-used)
 4. [Project Structure](#4-project-structure)
-5. [SQL Injection Background](#5-sql-injection-background)
+5. [What Is SQL Injection?](#5-what-is-sql-injection)
 6. [System Design](#6-system-design)
 7. [Application Walkthrough](#7-application-walkthrough)
-8. [Vulnerable Implementation](#8-vulnerable-implementation)
-9. [SQL Injection Attacks Demonstrated](#9-sql-injection-attacks-demonstrated)
+8. [The Vulnerable Version](#8-the-vulnerable-version)
+9. [The Attacks](#9-the-attacks)
 10. [Why the Vulnerability Works](#10-why-the-vulnerability-works)
-11. [Parameterised-Query Implementation](#11-parameterised-query-implementation)
-12. [How the Protection Works](#12-how-the-protection-works)
+11. [The Fix: Parameterised Queries](#11-the-fix-parameterised-queries)
+12. [Why the Fix Works](#12-why-the-fix-works)
 13. [Testing Methodology](#13-testing-methodology)
-14. [Vulnerable vs Protected Comparison](#14-vulnerable-vs-protected-comparison)
+14. [Vulnerable vs Protected: Side by Side](#14-vulnerable-vs-protected-side-by-side)
 15. [Results](#15-results)
 16. [Security Lessons Learned](#16-security-lessons-learned)
-17. [Limitations and Future Improvements](#17-limitations-and-future-improvements)
 18. [Conclusion](#18-conclusion)
 19. [References](#19-references)
-20. [Appendix A: How to Run the Project](#appendix-a-how-to-run-the-project)
+
 
 ---
 
 ## 1. Introduction
 
-Almost every web application stores its data in a database and reaches that
-data through **SQL** queries. When an application builds those queries by
-**pasting user input straight into the query text**, it blurs the line between
-*data* (what the user typed) and *code* (the instructions the database runs). An
-attacker who notices that blur can type input that is deliberately read as SQL,
-and so change the meaning of the query the application runs on its behalf. This
-is **SQL injection (SQLi)**, catalogued by MITRE as **CWE-89** and sitting at
-the top of the OWASP injection category for over a decade.
+Almost every website stores its information in a **database** and reads that
+information using **SQL** (a language for asking a database questions). A problem
+appears when a program builds its SQL by **gluing the user's typed text straight
+into the query**. When that happens, the database can no longer tell the
+difference between the *instructions written by the programmer* and the *text
+typed by the user*. A clever user can then type text that the database reads as
+new instructions.
 
-The impact is severe precisely because the database is where the valuable data
-lives. A single injectable parameter can let an attacker **log in without a
-password**, **read every row of every table** (including other users'
-credentials), and in many deployments modify or destroy data outright — all
-through an ordinary-looking search box or login form, with no special tools
-required.
+This is called **SQL injection (SQLi)**. It is one of the oldest and most
+dangerous web vulnerabilities — listed by MITRE as **CWE-89** and featured for
+years at the top of the OWASP list of web risks. Because the database is where
+the valuable data lives, a single weak input can let an attacker **log in
+without a password**, **read every user's details**, or even **change or delete
+data** — all through an ordinary-looking search box or login form.
 
-This assignment studies SQL injection in two parts:
+This report studies SQL injection in two halves:
 
-1. **The vulnerability.** A small but realistic online bookshop,
-   **DrukShelf**, is built so that its login form and its catalogue search
-   build SQL by string concatenation. Five distinct classes of SQL-injection
-   attack are then carried out against it, ending with a script that silently
-   reads the administrator's password out of the database (Sections 8–10).
-2. **The defence.** The application is switched to **parameterised (prepared)
-   queries**. Every one of the same attacks is replayed and now fails, while
-   legitimate logins and searches continue to work unchanged (Sections 11–15).
+1. **The problem.** I build a small online bookshop called **DrukShelf** whose
+   login form and search box build SQL by gluing text together. I then perform
+   **five different kinds** of SQL-injection attack against it (Sections 8–10).
+2. **The fix.** I switch the same app to **parameterised (prepared) queries** and
+   repeat every attack. They all fail, while normal logins and searches keep
+   working (Sections 11–15).
 
-> **Ethics and scope.** The entire exercise runs on `localhost` in a controlled
-> lab. The database is seeded with fictional data and rebuilt in memory on every
-> start. The included attack script targets only the demo application the
-> student also runs. Nothing here contacts, or provides any means of attacking,
-> any real or third-party system. SQL injection is demonstrated here solely to
-> understand and prevent it.
+> **Ethics and scope.** Everything runs on my own computer (`localhost`) with
+> made-up data that is rebuilt fresh each time the app starts. The attack script
+> only targets the demo app I run myself. Nothing here touches any real website.
+> SQL injection is shown here purely to understand and prevent it.
 
 ---
 
 ## 2. Objectives
 
-1. **Explain** what SQL injection is, the main categories it falls into, and
-   why string-concatenated queries make it possible.
-2. **Build** a functional web application with a login form and a
-   database-backed search feature.
-3. **Implement** the application first *without* protection and demonstrate a
-   range of working, controlled injection attacks: authentication bypass,
-   UNION-based extraction, error-based disclosure, and boolean- and time-based
-   *blind* injection.
-4. **Automate** a blind attack to show that the whole database is readable even
-   when no data is ever displayed on screen.
-5. **Implement** the correct defence — parameterised queries — across the exact
-   same application.
-6. **Demonstrate** that every attack that succeeded against the vulnerable
-   version now fails against the protected version, without breaking normal use.
-7. **Test** both versions and present the results as HTTP responses, recovered
-   data, and response timings.
-8. **Reflect** on the lessons, the remaining limitations, and complementary
-   defences (least privilege, hashing, input validation).
+1. **Explain** what SQL injection is and why gluing text into queries causes it.
+2. **Build** a working web app with a login form and a database-backed search.
+3. **Demonstrate** five kinds of SQL injection against the unprotected app:
+   authentication bypass, UNION-based, error-based, boolean-based blind, and
+   time-based blind.
+4. **Automate** a blind attack to show the whole database can be read even when
+   no data is ever shown on screen.
+5. **Fix** the app using parameterised queries.
+6. **Prove** that every attack now fails while normal use is unaffected.
+7. **Reflect** on the lessons and on extra layers of defence.
 
 ---
 
 ## 3. Technologies Used
 
-| Technology | Role in the project |
-|------------|---------------------|
-| **Node.js (≥ 20)** | JavaScript runtime for the application and the attack script. |
-| **Express 5** | Minimal web framework handling routes and form parsing. |
-| **sql.js (SQLite in WebAssembly)** | A *real* SQL engine running in memory, with no native build step and no separate database server — the whole lab installs with one `npm install`. |
-| **cookie-parser** | Reads the small session cookie set after login. |
-| **Node `crypto` (built-in)** | Generates unguessable session ids. |
-| **cross-env** | Sets the `SQLI_PROTECTION` environment variable identically across Windows / macOS / Linux. |
-| **HTML + CSS (server-rendered)** | Plain templates so the exact SQL sent to the database is printed on the page for inspection. |
+| Technology | What it does here |
+|------------|-------------------|
+| **Node.js (≥ 20)** | Runs the app and the attack script. |
+| **Express 5** | Small web framework for the pages and routes. |
+| **sql.js (SQLite in WebAssembly)** | A *real* SQL database that runs in memory with no install and no separate server — so the whole lab works after one `npm install`. |
+| **cookie-parser** | Reads the login session cookie. |
+| **Node `crypto`** | Creates random, hard-to-guess session ids. |
+| **cross-env** | Sets the `SQLI_PROTECTION` switch the same way on Windows/macOS/Linux. |
+| **HTML + CSS** | Simple server-rendered pages that print the real SQL on screen. |
 
-No ORM and no query-builder library is used: both the vulnerable concatenation
-and the parameterised fix are written by hand so that every step is inspectable.
+No ORM or query-builder library is used: both the vulnerable code and the fix
+are written by hand so every step is visible.
 
 ---
 
@@ -125,143 +101,130 @@ and the parameterised fix are written by hand so that every step is inspectable.
 
 ```
 Assignment_3/
-├── package.json             # scripts: start:vulnerable / start:protected / attack:extract
+├── package.json             # start:vulnerable / start:protected / attack:extract
 ├── README.md                # this report
-├── instruction.md           # how to run it and which screenshots to capture
+├── instruction.md           # how to run it and capture the screenshots
 ├── src/
-│   ├── config.js            # reads SQLI_PROTECTION and flips the security posture
-│   ├── db.js                # builds the in-memory SQLite DB and seeds books + users
-│   ├── queries.js           # THE HEART: vulnerable vs parameterised query builders
-│   ├── views.js             # server-rendered HTML, incl. the "SQL sent to the DB" panel
-│   └── server.js            # Express routes (login, catalogue search, logout)
+│   ├── config.js            # reads the SQLI_PROTECTION switch
+│   ├── db.js                # builds the in-memory database, seeds books + users
+│   ├── queries.js           # THE KEY FILE: vulnerable vs parameterised queries
+│   ├── views.js             # the HTML pages + the "SQL sent to the database" panel
+│   └── server.js            # the routes (login, search, logout)
 ├── attacker/
-│   └── extract.js           # automated boolean-based BLIND extractor (local lab tool)
+│   └── extract.js           # automatic blind extractor (local lab tool)
 ├── public/
-│   ├── style.css            # styling + light/dark theme; red = vulnerable, green = protected
-│   ├── app.js               # progressive enhancement: light/dark theme toggle
-│   ├── theme.js             # applies the saved theme before paint (no flash)
+│   ├── style.css            # styling + light/dark theme
+│   ├── app.js               # light/dark theme toggle
+│   ├── theme.js             # applies the saved theme before the page shows
 │   └── favicon.svg
-└── screenshots/             # your captured evidence for this report
+└── screenshots/             # the evidence used in this report
 ```
 
-The only file that differs in behaviour between the two versions is
-`src/queries.js`; everything else is shared.
+The only file that behaves differently between the two versions is
+`src/queries.js`. Everything else is shared.
 
 ---
 
-## 5. SQL Injection Background
+## 5. What Is SQL Injection?
 
-### 5.1 The root cause
+### 5.1 The root cause, in one example
 
-A SQL query is a string of *code*. Consider a login check written by
-concatenation:
+Here is a login check that builds its SQL by gluing text together:
 
 ```js
 "SELECT id, username, role FROM users " +
 "WHERE username = '" + username + "' AND password = '" + password + "'"
 ```
 
-If the user submits the username `admin` and password `1234`, the database
-receives:
+If someone types the username `admin` and password `1234`, the database receives:
 
 ```sql
 SELECT id, username, role FROM users WHERE username = 'admin' AND password = '1234'
 ```
 
-But the quotes that delimit the string literal came from the *developer*, while
-the text inside them came from the *user*. If the user types a quote of their
-own, they can close the literal early and have the rest of their input parsed as
-SQL. Submitting the username `' OR 1=1-- ` produces:
+The quotes around the values were written by the *programmer*, but the text
+inside them came from the *user*. So what if the user types a quote of their own?
+Typing the username `' OR 1=1-- ` produces:
 
 ```sql
 SELECT id, username, role FROM users WHERE username = '' OR 1=1--  ' AND password = '...'
 ```
 
-The `--` starts a SQL comment, so the password check is discarded and `1=1` is
-always true: the query now returns **every** user. The user's *data* became
-query *code*. That is the entire vulnerability.
+The `--` begins a SQL comment, which deletes the password check, and `1=1` is
+always true. The query now returns **every** user. The user's *text* became part
+of the database's *instructions*. That is the whole vulnerability.
 
-### 5.2 The categories demonstrated in this report
+### 5.2 The five kinds shown in this report
 
-SQL injection is usually classified by *how the attacker gets the answer back*:
+SQL injection is usually grouped by **how the attacker gets the answer back**:
 
-| Category | Sub-type | How the data comes back | Demonstrated in |
-|----------|----------|-------------------------|-----------------|
-| **In-band** | **Authentication bypass** | The injected logic changes the application's decision directly. | §9.1 |
-| **In-band** | **UNION-based** | Extra rows from other tables are appended to the normal result and displayed. | §9.2 |
-| **In-band** | **Error-based** | A provoked database error message, shown by the app, leaks information. | §9.3 |
-| **Inferential (blind)** | **Boolean-based** | No data is shown; the attacker infers it bit-by-bit from *whether the page changes*. | §9.4 |
-| **Inferential (blind)** | **Time-based** | No data and no visible change; the attacker infers it from *how long the response takes*. | §9.5 |
-
-A sixth technique, **out-of-band** (exfiltrating data over DNS/HTTP), is out of
-scope for a local lab but is described briefly in §17.
+| Group | Kind | How the data comes back | Shown in |
+|-------|------|-------------------------|----------|
+| **In-band** | **Authentication bypass** | The injected logic changes the app's decision directly. | §9.1 |
+| **In-band** | **UNION-based** | Extra rows from another table are shown in the results. | §9.2 |
+| **In-band** | **Error-based** | A database error message, shown by the app, leaks info. | §9.3 |
+| **Blind** | **Boolean-based** | No data is shown; the attacker reads it from *whether the page changes*. | §9.4 |
+| **Blind** | **Time-based** | Nothing visible changes; the attacker reads it from *how long the reply takes*. | §9.5 |
 
 ---
 
 ## 6. System Design
 
-DrukShelf is an online bookshop with two database-backed features that between
-them cover the whole attack surface this assignment needs:
+DrukShelf is a small online bookshop with two database-backed features that
+together cover everything this assignment needs:
 
 ```
-                      ┌──────────────────────────────────────────┐
-  Browser ──GET──▶    │  /catalog?q=<term>                        │
-                      │    builds a SELECT over the `books` table │──▶ sql.js
-  Browser ──POST─▶    │  /login  (username, password)             │    (SQLite
-                      │    builds a SELECT over the `users` table │     in WASM)
-                      └──────────────────────────────────────────┘
+                  ┌───────────────────────────────────────────┐
+  Browser ─GET─▶  │  /catalog?q=<term>                         │
+                  │    builds a SELECT on the `books` table    │──▶ sql.js
+  Browser ─POST▶  │  /login  (username, password)              │    (SQLite
+                  │    builds a SELECT on the `users` table    │     in memory)
+                  └───────────────────────────────────────────┘
 ```
 
 The database has two tables (see `src/db.js`):
 
-- **`books`** — the *public* catalogue (id, title, author, category, price,
-  stock). The search box is *supposed* to read this table.
-- **`users`** — the *private* accounts table (id, username, password, email,
-  role). The application never intends to show this table to a visitor. It is
-  the prize the injection attacks go after.
+- **`books`**: the *public* catalogue (id, title, author, category, price,
+  stock). The search box is *meant* to read this table.
+- **`users`**: the *private* accounts table (id, username, password, email,
+  role). The app never intends to show this to a visitor. It is the prize the
+  attacks go after.
 
-The single environment variable `SQLI_PROTECTION` selects, at start-up, whether
-`src/queries.js` builds its SQL by **concatenation** (`off`, vulnerable) or with
-**bound parameters** (`on`, protected). A coloured banner at the top of every
-page — **red** for vulnerable, **green** for protected — makes the running mode
-unmistakable in screenshots.
+One switch, `SQLI_PROTECTION`, decides at start-up whether `src/queries.js`
+builds SQL by **gluing text** (`off`, vulnerable) or with **bound parameters**
+(`on`, protected). A coloured banner : **red** for vulnerable, **green** for
+protected: makes the current mode obvious in every screenshot.
 
-> **Deliberately bad practice, flagged as such.** The `users` table stores
-> passwords in **plaintext**. Real systems must store only a salted hash (e.g.
-> bcrypt/argon2). Plaintext is used here only so the UNION and blind demos have
-> something human-readable to recover; §16 returns to this as a defence-in-depth
-> lesson.
+> **A deliberate bad practice, flagged on purpose.** The `users` table stores
+> passwords as **plain text**. Real systems must store only a salted *hash*
+> (e.g. bcrypt/argon2). Plain text is used here only so the attacks have
+> something readable to recover; §16 returns to this.
 
 ---
 
 ## 7. Application Walkthrough
 
-1. **Catalogue (`/catalog`).** The landing page shows the whole book catalogue
-   as cards and a search box above it. Searching `clean` returns *Clean Code*.
-   Every search prints, below the results, the **exact SQL string the database
-   received**, with the **user-supplied part highlighted** when it was
-   concatenated into the query — the key teaching aid of the whole app.
-2. **Login (`/login`).** A staff login form. On a successful login the account's
-   username and role appear in the header; the executed SQL is shown on the page
-   so an injected payload stays visible.
-3. **Attack Lab.** Both pages carry a collapsible *Attack Lab* panel with
-   **one-click payload buttons**, so the attacks can be demonstrated without
-   hand-typing long injection strings. The same buttons succeed in vulnerable
-   mode and are harmlessly neutralised in protected mode — the exact contrast
-   the report relies on. (It is a teaching aid, clearly labelled as such, not a
-   feature of a real shop.)
-4. **Mode banner & theme.** The red/green banner shows whether concatenation or
-   parameterisation is in force; a light/dark toggle sits in the header.
+1. **Catalogue (`/catalog`).** The home page lists all books as cards with a
+   search box on top. Every search prints the **exact SQL the database received**
+   below the results: the most useful teaching tool in the app.
+2. **Login (`/login`).** A staff login form. After an attempt, the executed SQL
+   is shown so an injected payload stays visible.
+3. **Attack Lab.** Both pages have a drop-down **Attack Lab** with **one-click
+   payload buttons**, so the attacks can be shown without typing long strings.
+   The same buttons work in vulnerable mode and are harmlessly blocked in
+   protected mode. (It is clearly labelled as a teaching aid.)
+4. **Mode banner and theme.** The red/green banner shows the current mode, and a
+   light/dark toggle sits in the header.
 
 ---
 
-## 8. Vulnerable Implementation
+## 8. The Vulnerable Version
 
-In vulnerable mode (`SQLI_PROTECTION=off`) both queries are assembled by string
-concatenation in `src/queries.js`:
+In vulnerable mode (`SQLI_PROTECTION=off`) both queries are built by gluing text
+together in `src/queries.js`:
 
 ```js
-// Authentication (login)
+// Login
 sql = "SELECT id, username, role FROM users " +
       "WHERE username = '" + username + "' AND password = '" + password + "'";
 
@@ -270,30 +233,37 @@ sql = "SELECT id, title, author, category, price FROM books " +
       "WHERE title LIKE '%" + term + "%' ORDER BY id";
 ```
 
-In both cases the user-supplied value is placed *inside the SQL string*, between
-single quotes that the developer wrote. Nothing stops the user's text from
-containing a quote of its own and escaping into the surrounding SQL.
+In both cases the user's value sits *inside* the SQL string, between quotes the
+programmer wrote. Nothing stops the user's text from containing its own quote and
+breaking out into the surrounding SQL.
 
-**Screenshot — the starting state and the concatenated query:**
+![Vulnerable home page](screenshots/01-vulnerable-catalog.png)
 
-![Vulnerable catalogue, clean search](screenshots/01-vulnerable-catalog.png)
-![The concatenated SQL printed on the page](screenshots/02-vulnerable-search-sql.png)
+***Figure 1 : The DrukShelf home page in vulnerable mode.*** *The red banner
+(top-right) confirms the app is building SQL by gluing text together. All 8 books
+are listed as cards, and the blue "Attack Lab" panel offers one-click buttons for
+every attack used in this report.*
 
-The red "SQL sent to the database" panel shows the user's term sitting *inside*
-the query text. That is the visual signature of an injectable query.
+![Normal search showing the glued-together SQL](screenshots/02-vulnerable-search-sql.png)
+
+***Figure 2 : A normal search for `clean`.*** *One book is returned. In the "SQL
+sent to the database" panel below, the word `clean` is **highlighted in red**
+because it was pasted directly into the query. That highlight is the warning sign
+of an injectable query : the user's text has become part of the SQL.*
 
 ---
 
-## 9. SQL Injection Attacks Demonstrated
+## 9. The Attacks
 
-All payloads below were run against the vulnerable build. Each is reproducible
-from the browser or with `curl`; §13 lists the exact commands.
+All attacks below were run against the vulnerable version. Every one can be
+reproduced from the browser (or the Attack Lab buttons); §13 lists the `curl`
+commands too.
 
-### 9.1 Authentication bypass (in-band)
+### 9.1 Authentication bypass
 
-**Goal:** log in as the administrator without knowing the password.
+**Goal** : log in as the administrator without knowing the password.
 
-**Payload** — in the *username* field (password left as anything):
+**Payload** : typed in the *username* box (password can be anything):
 
 ```
 ' OR 1=1-- 
@@ -305,134 +275,117 @@ The login query becomes:
 SELECT id, username, role FROM users WHERE username = '' OR 1=1--  ' AND password = '...'
 ```
 
-`1=1` is always true and the `--` comments out the password check, so the query
-returns **all 4 users** and the application logs the attacker in as the first
-one — `admin` (role `administrator`).
-
-A second, more surgical payload targets a known account by commenting out only
-the password:
-
-```
-admin'-- 
-```
-
-→ `WHERE username = 'admin'--  ' AND password = '...'` → authenticated as
-`admin` with no password at all.
-
-> **A subtle but instructive result.** The textbook payload `' OR '1'='1`
-> **without** a comment does **not** bypass *this* login, because SQL evaluates
-> `AND` before `OR`: the query reduces to
-> `username='' OR ('1'='1' AND password='...')`, and the password clause still
-> has to hold. You must either comment the password check out with `--` or make
-> the whole `AND` group true. This shows that a successful injection depends on
-> the exact query structure, not on a memorised "magic string".
+`1=1` is always true and `--` comments out the password check, so the query
+returns **all 4 users** and the app logs us in as the first one: `admin`.
 
 ![Authentication bypass](screenshots/03-auth-bypass.png)
 
-### 9.2 UNION-based extraction (in-band)
+***Figure 3 : Logging in with `' OR 1=1-- ` and any password.*** *The green
+message confirms we are signed in as **admin (administrator)** : the top bar now
+reads "admin · administrator". The SQL panel shows why: the highlighted payload
+made the condition always true and commented out the password check. The query
+matched all 4 rows, and we were logged in as the first.*
 
-**Goal:** read the private `users` table through the public catalogue search.
+> **A useful detail.** The textbook payload `' OR '1'='1` *without* a comment
+> does **not** bypass this login, because SQL checks `AND` before `OR`, so the
+> password part still has to be true. You must comment it out with `--` (or make
+> the whole AND-group true). This shows an attack depends on the exact query, not
+> on a memorised "magic string".
 
-A `UNION SELECT` appends the rows of a second query to the first. It requires
-the same number of columns; the catalogue query returns **five**
-(id, title, author, category, price), so the injected query must also select
-five.
+### 9.2 UNION-based extraction
 
-**Payload** — in the search box:
+**Goal** : read the private `users` table through the public search box.
+
+A `UNION SELECT` bolts the rows of a second query onto the first. Both must have
+the same number of columns; the catalogue returns **five**, so the injected query
+also selects five.
+
+**Payload** : in the search box:
 
 ```
 zzz' UNION SELECT id, username, password, email, role FROM users-- 
 ```
 
-The search query becomes:
-
-```sql
-SELECT id, title, author, category, price FROM books
-WHERE title LIKE '%zzz' UNION SELECT id, username, password, email, role FROM users--  %'
-```
-
-No book contains `zzz`, so the first query returns nothing and the result table
-is filled **entirely with the users table**: every username, **plaintext
-password**, email and role is displayed in the columns labelled *title / author /
-category / price*.
+No book contains `zzz`, so the first query returns nothing and the results table
+fills up entirely with the **users** table instead.
 
 ![UNION-based dump of the users table](screenshots/04-union-dump.png)
 
-### 9.3 Error-based disclosure (in-band)
+***Figure 4 : One UNION query leaks the entire accounts table.*** *All four users
+appear in the results, with their **plain-text passwords** (for example `admin` /
+`Dr#k_R00t_2024!`), emails and roles — displayed under the book columns. A public
+search box has just exposed every private credential.*
 
-**Goal:** make the database emit an error and have the application leak it.
+### 9.3 Error-based disclosure
 
-**Payload** — a single unbalanced quote in the search box:
+**Goal** : make the database produce an error and have the app leak it.
+
+**Payload** : a single quote in the search box:
 
 ```
 '
 ```
 
-This produces `... LIKE '%'%'`, which is syntactically invalid. The engine
-throws, and the vulnerable application prints the raw message to the page:
-
-```
-unrecognized token: "' ORDER BY id"
-```
-
-Even this terse message confirms to an attacker that input reaches the SQL
-parser unescaped and reveals the engine's behaviour. Richer engines (MySQL,
-SQL Server) can be coaxed into returning table and column *names* inside such
-error text, turning error messages into a full data-exfiltration channel.
+This makes invalid SQL (`... LIKE '%'%'`). The database throws, and the vulnerable
+app prints the raw message on the page.
 
 ![Error-based disclosure](screenshots/05-error-based.png)
 
-### 9.4 Boolean-based blind injection (inferential)
+***Figure 5 : A single quote breaks the query and leaks the error.*** *Instead of
+failing quietly, the app shows the database's own message :
+`unrecognized token: "' ORDER BY id"`. This confirms to an attacker that their
+input reaches the SQL engine unescaped. On bigger databases (MySQL, SQL Server),
+such errors can be pushed to reveal table and column names too.*
 
-**Goal:** read data even when the application shows **no** query output and
-**no** error — only whether a search *returned something or not*.
+### 9.4 Boolean-based blind injection
 
-The oracle is built from a condition that is true or false:
+**Goal:** read data even when the app shows **no** results and **no** error : only
+whether a search *found something or not*.
+
+**Payload** : asking a true/false question:
 
 ```
 zzzzz' OR (SELECT substr(password,1,1) FROM users WHERE username='admin')='D'-- 
 ```
 
-If the admin password's first character is `D`, the `OR` is true and the whole
-catalogue is returned ("8 rows"); otherwise the search matches nothing
-("No books matched"). "Results vs no results" is a one-bit answer, and by asking
-enough such questions — one per character, narrowed with a binary search — the
-entire password can be reconstructed.
+If the admin password's first letter is `D`, the `OR` is true and the whole
+catalogue appears; if not, nothing appears. "Results vs no results" is a yes/no
+answer, and by asking one question per letter the whole password can be rebuilt.
 
-![Boolean-based blind: a true condition returns rows](screenshots/06-boolean-blind.png)
+![Boolean-based blind: a true guess returns rows](screenshots/06-boolean-blind.png)
 
-### 9.5 Time-based blind injection (inferential)
+***Figure 6 : Boolean-based blind injection.*** *The payload asks "is the first
+letter of the admin password `D`?". Because the answer is **true**, the condition
+becomes true and all **8 books** are returned. A wrong guess (e.g. `Z`) returns
+"No books matched". That single yes/no difference is enough to read the password
+one letter at a time.*
 
-**Goal:** read data when the page looks **identical** whatever the answer — the
-only observable difference is the *response time*.
+### 9.5 Time-based blind injection
 
-SQLite has no `SLEEP()`, but hashing a large random blob costs measurable time,
-and a `CASE` runs it only when the condition is true:
+**Goal:** read data when the page looks **exactly the same** either way : the only
+clue is *how long the reply takes*.
+
+SQLite has no `SLEEP()`, but hashing a big random blob takes measurable time, and
+a `CASE` only runs it when the guess is true:
 
 ```
 zzz' OR CASE WHEN (SELECT unicode(substr(password,1,1)) FROM users
 WHERE username='admin')>64 THEN like('A',upper(hex(randomblob(20000000)))) ELSE 0 END-- 
 ```
 
-Measured on the lab machine:
+![Time-based blind: true is slow, false is fast](screenshots/08-time-based.png)
 
-| Condition | Response time |
-|-----------|---------------|
-| **True** (heavy blob runs) | **≈ 2.25 s** |
-| **False** (skipped) | **≈ 0.004 s** |
+***Figure 7 : Time-based blind injection, measured with `curl`.*** *The true
+guess took **0.778 s** because the heavy hash ran; the false guess took
+**0.0036 s** because it was skipped. The exact numbers depend on the machine and
+the blob size, but the gap between the two is   hundreds of times slower : is a completely reliable
+signal. The attacker reads the answer from the clock, with the page unchanged.*
 
-The exact figures depend on the machine and on the `randomblob` size (raise or
-lower `20000000` to lengthen or shorten the delay), but the *gap* — two to three
-orders of magnitude — is a completely reliable oracle. The attacker learns the
-bit purely from the clock, with the page content unchanged.
+### 9.6 Automating the blind attack
 
-![Time-based blind: true vs false response time](screenshots/08-time-based.png)
-
-### 9.6 Automated blind extraction
-
-The boolean oracle of §9.4 is tedious by hand but trivial to script.
-`attacker/extract.js` binary-searches every character of the admin password by
-repeatedly querying the catalogue and checking only whether results came back:
+The yes/no trick in §9.4 is slow by hand but easy to script.
+`attacker/extract.js` guesses each letter of the admin password with a binary
+search, asking the catalogue and checking only whether results came back.
 
 ```
 $ npm run attack:extract
@@ -440,50 +393,48 @@ $ npm run attack:extract
 Oracle confirmed: "1=1" -> results, "1=2" -> no results.
 Password length: 15 characters
 Extracting password: Dr#k_R00t_2024!
-────────────────────────────────────────────
   Recovered password for 'admin':  Dr#k_R00t_2024!
   HTTP requests sent:                 111
-────────────────────────────────────────────
 ```
 
-**The 15-character admin password was recovered in 111 requests — and it never
-once appeared on any page.** This is the point of the whole assignment: an
-injectable parameter exposes the *entire* database even when the application is
-careful never to display sensitive data.
-
 ![Automated blind extractor recovering the password](screenshots/07-blind-extractor.png)
+
+***Figure 8 : The automated extractor at work.*** *Using only the yes/no
+difference in a loop, it recovered the full 15-character admin password
+`Dr#k_R00t_2024!` in **111 requests** and the password **never appeared on any
+page**. This is the key point: one weak input exposes the entire database even
+when the app is careful never to display private data.*
 
 ---
 
 ## 10. Why the Vulnerability Works
 
-Every attack above has the **same single cause**: user input is concatenated
-into the SQL string, so the database cannot tell the developer's SQL apart from
-the user's text.
+Every attack above has the **same single cause**: the user's text is glued into
+the SQL string, so the database cannot tell the programmer's SQL apart from the
+user's input.
 
 ```
-Intended:  SELECT ... WHERE title LIKE '%  [DATA]  %'
+Intended:  SELECT ... WHERE title LIKE '%  [ USER TEXT ]  %'
 Attack:    SELECT ... WHERE title LIKE '%  ' UNION SELECT ... --  %'
-                                          └──────── CODE ───────┘
+                                         └──── becomes SQL CODE ────┘
 ```
 
-Once a quote from the input closes the literal, the parser treats everything
-after it as further SQL. Escaping quotes by hand is **not** a reliable fix —
-encodings, numeric contexts, and `LIKE` wildcards all create bypasses, and one
-missed spot reopens the hole. The only robust fix is to stop mixing data into
-the query text at all.
+Once a quote from the input closes the string, everything after it is read as
+more SQL. Trying to fix this by escaping quotes by hand is unreliable different
+encodings and contexts create ways around it, and one missed spot reopens the
+hole. The real fix is to stop mixing user text into the query at all.
 
 ---
 
-## 11. Parameterised-Query Implementation
+## 11. The Fix: Parameterised Queries
 
-In protected mode (`SQLI_PROTECTION=on`) `src/queries.js` uses **parameterised
-(prepared) statements**. The SQL text is fixed and contains `?` placeholders;
-the user's values are sent to the engine *separately* and bound to those
-placeholders:
+In protected mode (`SQLI_PROTECTION=on`), `src/queries.js` uses **parameterised
+(prepared) statements**. The SQL text is fixed and contains `?` placeholders; the
+user's values are sent to the database **separately** and slotted into those
+placeholders as pure data:
 
 ```js
-// Authentication (login) — protected
+// Login — protected
 sql    = 'SELECT id, username, role FROM users WHERE username = ? AND password = ?';
 params = [username, password];
 
@@ -493,51 +444,46 @@ sql    = "SELECT id, title, author, category, price FROM books " +
 params = [term];
 ```
 
-The placeholders are part of the **fixed** query; the term is concatenated into
-the `LIKE` pattern by the **database**, not by us. The engine compiles the query
-*first*, then treats each bound value purely as data for an existing slot.
+The placeholders are part of the fixed query; the search term is joined into the
+`LIKE` pattern by the **database**, not by us. The database compiles the query
+*first*, then treats each value purely as data for an existing slot.
 
-**Screenshot — the same search, now parameterised:**
+![Protected search: fixed SQL plus a bound parameter](screenshots/09-protected-search-sql.png)
 
-![Protected search: fixed SQL plus bound parameter](screenshots/09-protected-search-sql.png)
-
-The green panel shows the query and the bound parameter as **two separate
-things** — the structural difference that defeats every attack in §9.
+***Figure 9 : The same search in protected mode.*** *The banner is now **green**.
+The query uses a `?` placeholder, and the user's input is shown **separately** as
+a bound parameter (`$1 = "clean"`). Code and data are kept apart : this is the
+structural difference that defeats every attack in Section 9.*
 
 ---
 
-## 12. How the Protection Works
+## 12. Why the Fix Works
 
-With parameterised queries, a quote in the input is just the character
-`'`. There is no string literal for it to escape, because the value is never
-spliced into the SQL text at all. Each §9 payload collapses:
+With parameterised queries, a quote in the input is just the character `'`. There
+is no string for it to break out of, because the value is never placed inside the
+SQL text. Each attack from Section 9 simply collapses:
 
 | Payload | Vulnerable result | Protected result |
 |---------|-------------------|------------------|
-| `' OR 1=1-- ` (login) | Returns all users → logged in as admin | Searches for a *user literally named* `' OR 1=1-- ` → **no match → login refused** |
-| `zzz' UNION SELECT ... users-- ` | Dumps the users table | Searches for that whole string as a *book title* → **No books matched** |
-| `'` (search) | Database error leaked | Searches for a title containing an apostrophe → returns *The Web Application Hacker's Handbook* → **no error** |
-| Blind payloads | Oracle works; password extracted | Treated as a literal title → always "No books matched" → **oracle is dead** |
+| `' OR 1=1-- ` (login) | Logged in as admin | Looks for a *user actually named* `' OR 1=1-- ` → **no match → refused** |
+| `zzz' UNION SELECT … users-- ` | Dumps the users table | Searched as a *book title* → **No books matched** |
+| `'` (search) | Database error leaked | Searched as a title containing an apostrophe → **no error** |
+| Blind payloads | Oracle works; password extracted | Treated as a literal title → **oracle dead** |
 
-That last row is worth stressing: against the protected build, running
-`npm run attack:extract` prints *"Injection does not appear to work here … the
-server is most likely running in PROTECTED mode"* — the extractor fails because
-the quote never escapes.
-
-> **Note on layers.** The app also HTML-escapes output (`esc()` in `views.js`),
-> which prevents XSS — a *different* vulnerability at a *different* layer.
-> Output encoding does **not** stop SQL injection, and parameterisation does
-> **not** stop XSS. Each layer needs its own defence.
+> **One more layer.** The app also HTML-escapes its output (`esc()` in
+> `views.js`), which prevents a *different* attack called XSS. Note that output
+> escaping does **not** stop SQL injection, and parameterised queries do **not**
+> stop XSS. Each layer needs its own defence.
 
 ---
 
 ## 13. Testing Methodology
 
-Both builds were tested from the browser and reproducibly with `curl`. Start the
-relevant server first (see Appendix A), then:
+Both versions were tested in the browser and reproducibly with `curl`. Start the
+relevant server first (Appendix A), then:
 
 ```powershell
-# --- 9.1 Authentication bypass (run against each mode) ---
+# --- 9.1 Authentication bypass ---
 curl.exe -s http://localhost:3000/login --data-urlencode "username=' OR 1=1-- " --data-urlencode "password=x" | Select-String "Authenticated as","Invalid"
 
 # --- 9.2 UNION-based extraction ---
@@ -546,157 +492,122 @@ curl.exe -s -G http://localhost:3000/catalog --data-urlencode "q=zzz' UNION SELE
 # --- 9.3 Error-based disclosure ---
 curl.exe -s -G http://localhost:3000/catalog --data-urlencode "q='" | Select-String "database error","unrecognized token"
 
-# --- 9.5 Time-based blind (watch the time_total) ---
+# --- 9.5 Time-based blind (watch the time) ---
 curl.exe -s -G -o NUL -w "time=%{time_total}s`n" http://localhost:3000/catalog --data-urlencode "q=zzz' OR CASE WHEN (SELECT unicode(substr(password,1,1)) FROM users WHERE username='admin')>64 THEN like('A',upper(hex(randomblob(20000000)))) ELSE 0 END-- "
 
 # --- 9.6 Automated blind extraction ---
 npm run attack:extract
 ```
 
-Each command is run twice — once with the server in `start:vulnerable` and once
-in `start:protected` — and the two outcomes are compared. The results are in
-§15.
+Each command was run once against `start:vulnerable` and once against
+`start:protected`, and the two outcomes compared. The results are in Section 15.
 
 ---
 
-## 14. Vulnerable vs Protected Comparison
+## 14. Vulnerable vs Protected: Side by Side
 
-| Attack (§) | Payload shape | Vulnerable build | Protected build |
-|------------|---------------|------------------|-----------------|
-| Auth bypass (9.1) | `' OR 1=1-- ` | **Logged in as admin** | Login refused |
-| UNION dump (9.2) | `… UNION SELECT … FROM users-- ` | **Entire users table leaked** | "No books matched" |
-| Error-based (9.3) | `'` | **DB error leaked to page** | Normal result, no error |
-| Boolean blind (9.4) | `… OR (substr(...))='x'-- ` | **Oracle works** | Oracle dead (literal search) |
-| Time-based blind (9.5) | `… CASE WHEN … randomblob …` | **~2.25 s vs ~0.004 s** | Constant, fast |
-| Automated (9.6) | `extract.js` | **Password recovered (111 reqs)** | Extractor reports "protected" |
-| Legitimate login | `yeshi` / `summer2023` | Works | **Works (unchanged)** |
-| Legitimate search | `clean` | Works | **Works (unchanged)** |
+| Attack (§) | Vulnerable version | Protected version |
+|------------|--------------------|-------------------|
+| Auth bypass (9.1) | **Logged in as admin** | Login refused |
+| UNION dump (9.2) | **Whole users table leaked** | "No books matched" |
+| Error-based (9.3) | **DB error leaked** | Normal result, no error |
+| Boolean blind (9.4) | **Yes/no oracle works** | Oracle dead (literal search) |
+| Time-based blind (9.5) | **0.778 s vs 0.0036 s** | Constant, fast |
+| Automated (9.6) | **Password recovered (111 reqs)** | Extractor reports "protected" |
+| Normal login (`yeshi`) | Works | **Works (unchanged)** |
+| Normal search (`clean`) | Works | **Works (unchanged)** |
 
-The defence blocks every attack **and** leaves normal use untouched — the mark
-of a correct fix rather than a blunt filter.
+The fix blocks every attack **and** leaves normal use untouched — the sign of a
+correct fix rather than a blunt filter. The screenshots below show the protected
+side of this table.
+
+![Protected: UNION payload blocked](screenshots/10-protected-union-blocked.png)
+
+***Figure 10 : The UNION attack (Figure 4), re-run in protected mode.*** *The
+payload is now treated as one long book title to search for the whole string is
+held in `$1` so it matches nothing: "No books matched". The users table stays
+private.*
+
+![Protected: login bypass blocked](screenshots/11-protected-auth-blocked.png)
+
+***Figure 11 : The login bypass (Figure 3), re-run in protected mode.*** *The
+payload `' OR 1=1-- ` is now just a username to look up (`$1`), so no account
+matches and the login is correctly refused: "Invalid username or password."*
+
+![Protected: normal login still works](screenshots/12-protected-legit.png)
+
+***Figure 12 : Protection does not break normal use.*** *A real staff login
+(`yeshi` / `summer2023`) still succeeds in protected mode. The values are passed
+as parameters (`$1`, `$2`), the account is found, and the user is signed in the
+defence blocks attacks without getting in the way of genuine users.*
+
+![Protected: extractor reports it is blocked](screenshots/13-protected-extractor-blocked.png)
+
+***Figure 13 : The automated extractor run against the protected app.*** *Its
+first probes fail, so it stops and reports that injection no longer works: the
+quote is bound as data, not SQL. The fix is doing its job.*
 
 ---
 
 ## 15. Results
 
-- **Vulnerable build:** all five attack classes succeeded. The administrator
-  password `Dr#k_R00t_2024!` was obtained three independent ways — directly via
-  the UNION dump, and inferentially via the boolean and time-based oracles — and
-  the login was bypassed without any password.
-- **Protected build:** every payload was neutralised. Injected quotes were
-  treated as ordinary characters, so attacks became harmless literal searches or
-  refused logins, while legitimate logins and searches behaved exactly as before.
-- **Key metric:** the automated extractor recovered a 15-character password in
-  **111 HTTP requests** against the vulnerable build and **0 characters** against
-  the protected build.
-
-![Protected: UNION payload blocked](screenshots/10-protected-union-blocked.png)
-![Protected: auth bypass blocked](screenshots/11-protected-auth-blocked.png)
-![Protected: legitimate login still works](screenshots/12-protected-legit.png)
-![Protected: extractor reports protection](screenshots/13-protected-extractor-blocked.png)
+- **Vulnerable version:** all five kinds of attack worked. The admin password
+  `Dr#k_R00t_2024!` was obtained three separate ways: directly via the UNION
+  dump, and indirectly via the boolean and time-based oracles: the boolean
+  oracle returned true/false responses, and the time-based oracle used delays to
+  infer information. The login was
+  bypassed with no password at all.
+- **Protected version:** every attack was blocked. Injected quotes became
+  ordinary characters, so attacks turned into harmless literal searches or
+  refused logins, while normal logins and searches behaved exactly as before.
+- **Headline number:** the automatic extractor recovered a 15-character password
+  in **111 requests** against the vulnerable version, and **0 characters** against
+  the protected version.
 
 ---
 
 ## 16. Security Lessons Learned
 
-1. **Parameterised queries are the primary defence.** Separating code from data
-   at the query layer removes the entire vulnerability class, not just the
-   payloads you thought of.
-2. **Never build SQL by concatenation**, and don't rely on hand-escaping quotes;
-   it is fragile and routinely bypassed.
-3. **Defence in depth matters.** Even with injection present, several other
-   mistakes made it worse and should be fixed independently:
-   - **Hash passwords** (bcrypt/argon2) so a dump yields no usable credentials.
-   - **Least-privilege database accounts** so a read-only web user cannot write
-     or drop tables.
-   - **Do not leak error messages** to users; log them server-side and show a
-     generic message.
-   - **Validate and constrain input** (type, length, allow-lists) as an extra
-     layer, though never as the only one.
-4. **Blind injection is still total compromise.** Hiding data from the page does
-   not protect it; a boolean or timing side-channel is enough to read everything.
-5. **Vulnerabilities are layered.** Fixing SQLi does not fix XSS, and vice
-   versa; each layer needs its own, correct defence.
-
----
-
-## 17. Limitations and Future Improvements
-
-- **Single engine.** The lab uses SQLite (via sql.js). Error-based injection is
-  far richer on MySQL/SQL Server (`extractvalue`, `CAST`-based errors), and
-  those engines provide a real `SLEEP()` for time-based attacks. The techniques
-  shown here transfer directly; only the exact payloads change.
-- **Plaintext passwords** are intentional for readable demos and must never
-  appear in real systems (§16).
-- **No stored procedures / second-order injection.** A natural extension is
-  *second-order* SQLi, where a payload is stored safely and later used unsafely.
-- **No out-of-band channel.** Real engagements may exfiltrate over DNS/HTTP when
-  no in-band or inferential channel exists; this is out of scope for an offline
-  lab.
-- **No ORM comparison.** A follow-up could show how query builders / ORMs
-  parameterise by default, and how raw-SQL "escape hatches" reintroduce risk.
+1. **Parameterised queries are the main defence.** Keeping code and data apart at
+   the query level removes the whole problem, not just the payloads you thought of.
+2. **Never build SQL by gluing text together,** and don't rely on escaping quotes
+   by hand: it is fragile and often bypassed.
+3. **Use more than one layer (defence in depth).** Even with injection present,
+   other mistakes made it worse and should be fixed independently:
+   - **Hash passwords** (bcrypt/argon2) so a leaked table is useless.
+   - **Give the database user least privilege** so a read-only app can't delete data.
+   - **Don't show raw error messages** to users; log them and show a generic note.
+   - **Validate input** (type, length, allow-lists) as an extra layer — never the only one.
+4. **Blind injection is still total loss.** Hiding data from the page does not
+   protect it; a yes/no or timing clue is enough to read everything.
+5. **Different vulnerabilities need different fixes.** Fixing SQLi does not fix XSS.
 
 ---
 
 ## 18. Conclusion
 
-SQL injection comes down to one mistake — letting user input become part of the
-query *code* — and a single correct fix: **parameterised queries**, which keep
-user input as *data*. This assignment built one small application, demonstrated
-five distinct classes of SQL injection against it (including a script that read
-the admin password straight out of the database without ever displaying it), and
-then defeated every one of those attacks by changing only *how the queries are
-built*. The side-by-side result — identical application, opposite security
-outcomes — shows that SQL injection is not an unavoidable hazard of
-database-backed web apps but a direct, preventable consequence of how the SQL is
-constructed.
+SQL injection comes down to one mistake: letting the user's text become part of
+the query's **instructions**: and one correct fix: **parameterised queries**,
+which keep the user's text as **data**. In this assignment I built one small app,
+showed five different kinds of SQL injection against it (including a script that
+read the admin password straight out of the database without ever displaying it),
+and then stopped every one of those attacks by changing only *how the queries are
+built*. Same app, opposite outcomes: SQL injection is not an unavoidable risk of
+database-driven websites, but a preventable result of how the SQL is written.
 
 ---
 
 ## 19. References
 
-1. MITRE. *CWE-89: Improper Neutralization of Special Elements used in an SQL
-   Command ('SQL Injection')*. https://cwe.mitre.org/data/definitions/89.html
-2. OWASP. *SQL Injection* and *SQL Injection Prevention Cheat Sheet*.
-   https://owasp.org/www-community/attacks/SQL_Injection /
-   https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html
-3. OWASP. *Blind SQL Injection*.
+1. MITRE. *CWE-89: SQL Injection.* https://cwe.mitre.org/data/definitions/89.html
+2. OWASP. *SQL Injection* and *SQL Injection Prevention Cheat Sheet.*
+   https://owasp.org/www-community/attacks/SQL_Injection
+3. OWASP. *Blind SQL Injection.*
    https://owasp.org/www-community/attacks/Blind_SQL_Injection
-4. PortSwigger Web Security Academy. *SQL injection*.
+4. PortSwigger Web Security Academy. *SQL injection.*
    https://portswigger.net/web-security/sql-injection
-5. SQLite. *Query Language: expressions, `LIKE`, `randomblob`, CTEs*.
-   https://www.sqlite.org/lang.html
-6. OWASP. *Password Storage Cheat Sheet* (hashing with bcrypt/argon2).
+5. SQLite. *Query Language.* https://www.sqlite.org/lang.html
+6. OWASP. *Password Storage Cheat Sheet.*
    https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
 
 ---
-
-## Appendix A: How to Run the Project
-
-Full step-by-step instructions, including which screenshots to capture, are in
-[`instruction.md`](instruction.md). In brief:
-
-```powershell
-# 1. Install dependencies (once)
-npm install
-
-# 2a. Run the VULNERABLE version (red banner)
-npm run start:vulnerable      # http://localhost:3000
-
-# 2b. …or the PROTECTED version (green banner)
-npm run start:protected
-
-# 3. Run the automated blind extractor against whichever version is running
-npm run attack:extract
-```
-
-Requires **Node.js 20+**. Everything runs on `localhost`; the in-memory database
-is rebuilt on every start, so attacks never cause lasting damage.
-
-<div align="center">
-
----
-
-*Submitted in partial fulfilment of WEB404: Secure Coding Practices.*
-
-</div>
