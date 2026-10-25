@@ -1,0 +1,8 @@
+node_modules/
+*.log
+.DS_Store
+
+# Lab artefacts created at runtime by the demo / the attacks. They are
+# regenerated on demand and must never be committed.
+lab-secret.txt
+pwned.txt

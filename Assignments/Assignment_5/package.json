@@ -1,0 +1,22 @@
+{
+  "name": "drukconsole-cmd-injection-demo",
+  "version": "1.0.0",
+  "description": "WEB404 Assignment 5 - A web-based command-line console that demonstrates command injection (CWE-78) in a vulnerable mode and defeats it in a hardened secure mode (local lab only)",
+  "main": "src/server.js",
+  "scripts": {
+    "start:vulnerable": "cross-env CLI_SECURE=off node src/server.js",
+    "start:secure": "cross-env CLI_SECURE=on node src/server.js",
+    "start": "cross-env CLI_SECURE=off node src/server.js",
+    "attack:chain": "node attacker/inject-chain.js",
+    "attack:exfil": "node attacker/inject-exfil.js",
+    "attack:blind": "node attacker/inject-blind.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "cross-env": "^7.0.3",
+    "express": "^5.1.0"
+  }
+}

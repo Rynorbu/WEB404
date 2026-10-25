@@ -1,0 +1,21 @@
+{
+  "name": "csrf-demo",
+  "version": "1.0.0",
+  "description": "WEB404 Assignment 2 - A CSRF-vulnerable form and its defence using synchronizer CSRF tokens (local lab only)",
+  "main": "src/server.js",
+  "scripts": {
+    "start:vulnerable": "cross-env CSRF_PROTECTION=off node src/server.js",
+    "start:protected": "cross-env CSRF_PROTECTION=on node src/server.js",
+    "start:attacker": "node attacker/server.js",
+    "start": "cross-env CSRF_PROTECTION=off node src/server.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cross-env": "^7.0.3",
+    "express": "^5.1.0"
+  }
+}

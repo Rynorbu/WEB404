@@ -1,0 +1,22 @@
+{
+  "name": "sqli-demo",
+  "version": "1.0.0",
+  "description": "WEB404 Assignment 3 - A SQL-injection-vulnerable web application and its defence using parameterised queries (local lab only)",
+  "main": "src/server.js",
+  "scripts": {
+    "start:vulnerable": "cross-env SQLI_PROTECTION=off node src/server.js",
+    "start:protected": "cross-env SQLI_PROTECTION=on node src/server.js",
+    "start": "cross-env SQLI_PROTECTION=off node src/server.js",
+    "attack:extract": "node attacker/extract.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cross-env": "^7.0.3",
+    "express": "^5.1.0",
+    "sql.js": "^1.13.0"
+  }
+}

@@ -9,7 +9,7 @@ function securityHeaders(req, res, next) {
   // no plugins, no framing.
   res.setHeader(
     'Content-Security-Policy',
-    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; " +
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' blob:; " +
       "object-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
   );
   // Stop browsers from MIME-sniffing a response into an executable type

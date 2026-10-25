@@ -1,0 +1,23 @@
+{
+  "name": "jwt-auth-demo",
+  "version": "1.0.0",
+  "description": "WEB404 Assignment 4 - A JWT-based authentication system, a demonstration of common JWT attacks, and a hardened secure-JWT implementation (local lab only)",
+  "main": "src/server.js",
+  "scripts": {
+    "start:vulnerable": "cross-env JWT_SECURE=off node src/server.js",
+    "start:secure": "cross-env JWT_SECURE=on node src/server.js",
+    "start": "cross-env JWT_SECURE=off node src/server.js",
+    "attack:alg-none": "node attacker/alg-none.js",
+    "attack:brute": "node attacker/brute-secret.js",
+    "attack:tamper": "node attacker/tamper.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "cookie-parser": "^1.4.7",
+    "cross-env": "^7.0.3",
+    "express": "^5.1.0"
+  }
+}
